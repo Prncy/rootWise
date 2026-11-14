@@ -1,7 +1,7 @@
 name: Build RootWise
 on:
   push:
-    branches: [main, feature/global-agriculture-mvp]
+    branches: [main, feature/global-agriculture-mvp, "fix/**"]
   pull_request:
     branches: [main]
 jobs:
@@ -12,6 +12,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm install
+      # No npm cache is configured until a package-lock.json is committed.
+      - run: npm install --no-audit --no-fund
+      - run: npm test
       - run: npm run build

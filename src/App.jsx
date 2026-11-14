@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { CROPS, GROUP_LABELS } from "./data/crops.js";
-import { getClimate, searchPlace } from "./lib/climate.js";
+import { getClimate, searchPlace, validateCoordinates } from "./lib/climate.js";
 import { buildRotations, calculateBudget, projectSeasons, rankCrops } from "./lib/agronomy.js";
 
 const initialFarm = {
@@ -47,6 +47,13 @@ export default function App() {
   }
 
   async function chooseLocation(latitude, longitude, label) {
+    if (!validateCoordinates(latitude, longitude)) {
+      setError("Enter a valid latitude (-90 to 90) and longitude (-180 to 180).");
+      setNotice("Location was not analysed. Check the coordinates and try again.");
+      return;
+    }
+    latitude = Number(latitude);
+    longitude = Number(longitude);
     setBusy(true); setError(""); setNotice("Loading recent climate observations…");
     update("latitude", String(latitude)); update("longitude", String(longitude));
     if (label) update("place", label);
@@ -164,7 +171,7 @@ export default function App() {
       </section>}
 
       {activeTab === "crops" && <section className="panel page-panel"><div className="section-heading"><div><p className="eyebrow">CROP KNOWLEDGE</p><h2>Explore crop suitability</h2><p className="muted">Compare broad crop requirements with your location and soil information.</p></div></div>
-        <div className="notice"><b>How to read these scores:</b> they are screening indicators, not probability of success or yield forecasts. Scores are based only on available inputs; missing factors are not treated as ideal conditions.</div>
+        <div className="notice"><b>How to read these scores:</b> they are screening indicators, not probability of success or yield forecasts. Scores are based only on available inputs; missing factors are not treated as ideal conditions. Soil texture is saved in your profile but is not yet part of this score.</div>
         <div className="crop-grid">{ranked.map(crop => <article className="crop-card" key={crop.name}><div className="crop-card-top"><span className="crop-icon">{crop.group === "legume" ? "◉" : crop.group === "cereal" ? "✳" : "❋"}</span><span className="group-pill">{GROUP_LABELS[crop.group]}</span></div><h3>{crop.name}</h3><p>{crop.note}</p><div className="crop-ranges"><span>pH <b>{crop.ph[0]}–{crop.ph[1]}</b></span><span>Temp <b>{crop.temp[0]}–{crop.temp[1]}°C</b></span><span>Rain <b>{crop.rain[0]}–{crop.rain[1]}mm</b></span></div><Score score={crop.score} /><p className="muted tiny">{crop.dataCoverage} of 3 screening factors available</p></article>)}</div>
       </section>}
 
@@ -182,7 +189,7 @@ export default function App() {
       </section>}
 
       {activeTab === "farm" && <section className="page-panel"><div className="section-heading"><div><p className="eyebrow">YOUR FARM PROFILE</p><h2>Farm information</h2><p className="muted">Your entries are saved in this browser on this device.</p></div></div>
-        <div className="panel form-panel"><div className="form-grid"><label>Farm name or location<input value={farm.place} onChange={e => update("place", e.target.value)} placeholder="My farm" /></label><label>Farm area<input type="number" min="0" value={farm.area} onChange={e => update("area", e.target.value)} /></label><label>Area unit<select value={farm.areaUnit} onChange={e => update("areaUnit", e.target.value)}><option>ha</option><option>acres</option></select></label><label>Soil pH<input type="number" min="3" max="10" step="0.1" value={farm.ph} onChange={e => update("ph", e.target.value)} placeholder="From a soil test" /></label><label>Soil texture<select value={farm.texture} onChange={e => update("texture", e.target.value)}><option>Unknown</option><option>Sandy</option><option>Loamy</option><option>Clay</option><option>Silty</option></select></label><label>Organic matter (%)<input type="number" min="0" max="100" step="0.1" value={farm.organicMatter} onChange={e => update("organicMatter", e.target.value)} placeholder="From a soil test" /></label></div>
+        <div className="panel form-panel"><div className="form-grid"><label>Farm name or location<input value={farm.place} onChange={e => update("place", e.target.value)} placeholder="My farm" /></label><label>Farm area<input type="number" min="0.01" step="any" value={farm.area} onChange={e => update("area", e.target.value)} /></label><label>Area unit<select value={farm.areaUnit} onChange={e => update("areaUnit", e.target.value)}><option>ha</option><option>acres</option></select></label><label>Soil pH<input type="number" min="3" max="10" step="0.1" value={farm.ph} onChange={e => update("ph", e.target.value)} placeholder="From a soil test" /></label><label>Soil texture<select value={farm.texture} onChange={e => update("texture", e.target.value)}><option>Unknown</option><option>Sandy</option><option>Loamy</option><option>Clay</option><option>Silty</option></select></label><label>Organic matter (%)<input type="number" min="0" max="100" step="0.1" value={farm.organicMatter} onChange={e => update("organicMatter", e.target.value)} placeholder="From a soil test" /></label></div>
           <div className="notice"><b>Soil data source:</b> enter values from a laboratory soil test if available. Texture and pH have not been automatically measured by RootWise.</div><button className="button danger-outline" onClick={resetFarm}>Clear farm data on this device</button>
         </div>
       </section>}
