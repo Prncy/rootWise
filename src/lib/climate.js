@@ -1,6 +1,7 @@
 const ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
 
 export function validateCoordinates(latitude, longitude) {
+  if (String(latitude).trim() === "" || String(longitude).trim() === "") return false;
   const lat = Number(latitude);
   const lon = Number(longitude);
   return Number.isFinite(lat) && Number.isFinite(lon) &&
