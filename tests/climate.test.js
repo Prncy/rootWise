@@ -28,7 +28,7 @@ test("climate summary averages complete calendar years, not partial years", () =
   assert.equal(result.years, 2);
   assert.equal(result.start, "2023-01-01");
   assert.equal(result.end, "2024-12-31");
-  assert.equal(result.annualRain, 365);
+  assert.equal(result.annualRain, 365.5);
   assert.equal(result.meanTemp, 20);
   assert.equal(result.meanMax, 25);
   assert.equal(result.meanMin, 15);
