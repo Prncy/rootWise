@@ -1,59 +1,106 @@
 const ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
 
+export function validateCoordinates(latitude, longitude) {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  return Number.isFinite(lat) && Number.isFinite(lon) &&
+    lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+}
+
 export async function getClimate(latitude, longitude) {
-  const end = new Date();
-  end.setUTCDate(end.getUTCDate() - 2);
-  const start = new Date(end);
-  start.setUTCFullYear(start.getUTCFullYear() - 5);
-  const date = d => d.toISOString().slice(0, 10);
+  if (!validateCoordinates(latitude, longitude)) {
+    throw new Error("Enter a valid latitude (-90 to 90) and longitude (-180 to 180).");
+  }
+
+  // Use five complete calendar years. This avoids dividing partial-year rainfall
+  // totals by a full-year count and makes the displayed period reproducible.
+  const currentYear = new Date().getUTCFullYear();
+  const endYear = currentYear - 1;
+  const startYear = endYear - 4;
+  const startDate = `${startYear}-01-01`;
+  const endDate = `${endYear}-12-31`;
+
   const url = new URL(ARCHIVE);
   url.search = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    start_date: date(start),
-    end_date: date(end),
+    latitude: String(Number(latitude)),
+    longitude: String(Number(longitude)),
+    start_date: startDate,
+    end_date: endDate,
     daily: "precipitation_sum,temperature_2m_mean,temperature_2m_max,temperature_2m_min",
     timezone: "auto"
   }).toString();
 
   const response = await fetch(url);
   if (!response.ok) throw new Error("Climate service returned " + response.status);
-  const payload = await response.json();
-  const daily = payload.daily;
-  if (!daily?.time?.length) throw new Error("No daily climate observations were returned for this location.");
-
-  const years = new Set(daily.time.map(d => d.slice(0, 4)));
-  const rainValues = (daily.precipitation_sum || []).filter(Number.isFinite);
-  const tempValues = (daily.temperature_2m_mean || []).filter(Number.isFinite);
-  const maxValues = (daily.temperature_2m_max || []).filter(Number.isFinite);
-  const minValues = (daily.temperature_2m_min || []).filter(Number.isFinite);
-  const totalRain = rainValues.reduce((a, b) => a + b, 0);
-  const monthlyRain = Array(12).fill(0);
-  const monthlyDays = Array(12).fill(0);
-  daily.time.forEach((day, i) => {
-    const month = Number(day.slice(5, 7)) - 1;
-    const value = daily.precipitation_sum?.[i];
-    if (Number.isFinite(value)) {
-      monthlyRain[month] += value;
-      monthlyDays[month] += 1;
-    }
-  });
-  const divisor = Math.max(1, years.size);
-  return {
-    years: years.size,
-    start: daily.time[0],
-    end: daily.time[daily.time.length - 1],
-    annualRain: totalRain / divisor,
-    meanTemp: average(tempValues),
-    meanMax: average(maxValues),
-    meanMin: average(minValues),
-    monthlyRain: monthlyRain.map((value, i) => monthlyDays[i] ? value / divisor : 0),
-    source: "Open-Meteo Historical Weather API"
-  };
+  return summarizeClimate(await response.json());
 }
 
-function average(values) {
-  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+export function summarizeClimate(payload) {
+  const daily = payload?.daily;
+  if (!daily?.time?.length) {
+    throw new Error("No daily climate observations were returned for this location.");
+  }
+
+  const yearStats = new Map();
+  daily.time.forEach((day, index) => {
+    const year = day.slice(0, 4);
+    if (!yearStats.has(year)) {
+      yearStats.set(year, { rain: 0, rainDays: 0, indices: [] });
+    }
+    const stats = yearStats.get(year);
+    stats.indices.push(index);
+    const rain = daily.precipitation_sum?.[index];
+    if (Number.isFinite(rain)) {
+      stats.rain += rain;
+      stats.rainDays += 1;
+    }
+  });
+
+  // Exclude years with too little rainfall coverage instead of treating missing
+  // observations as zero. A threshold of 350 days allows a small number of gaps.
+  const validYears = [...yearStats.entries()]
+    .filter(([, stats]) => stats.rainDays >= 350);
+
+  if (!validYears.length) {
+    throw new Error("There are not enough complete daily rainfall observations to calculate an annual average.");
+  }
+
+  const validIndices = new Set(validYears.flatMap(([, stats]) => stats.indices));
+  const average = values => {
+    const usable = values.filter(Number.isFinite);
+    return usable.length
+      ? usable.reduce((sum, value) => sum + value, 0) / usable.length
+      : null;
+  };
+
+  const annualRain = average(validYears.map(([, stats]) => stats.rain));
+  const monthlyByYear = validYears.map(([, stats]) => {
+    const months = Array(12).fill(0);
+    daily.time.forEach((day, index) => {
+      if (!stats.indices.includes(index)) return;
+      const month = Number(day.slice(5, 7)) - 1;
+      const rain = daily.precipitation_sum?.[index];
+      if (Number.isFinite(rain)) months[month] += rain;
+    });
+    return months;
+  });
+  const monthlyRain = Array.from({ length: 12 }, (_, month) =>
+    average(monthlyByYear.map(year => year[month]))
+  );
+
+  const meanFor = key => average(daily[key]?.filter((_, index) => validIndices.has(index)) || []);
+
+  return {
+    years: validYears.length,
+    start: validYears[0][0] + "-01-01",
+    end: validYears[validYears.length - 1][0] + "-12-31",
+    annualRain,
+    meanTemp: meanFor("temperature_2m_mean"),
+    meanMax: meanFor("temperature_2m_max"),
+    meanMin: meanFor("temperature_2m_min"),
+    monthlyRain,
+    source: "Open-Meteo Historical Weather API"
+  };
 }
 
 export async function searchPlace(query) {
