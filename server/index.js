@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -21,6 +22,13 @@ app.use(cors({
   }
 }));
 app.use(express.json());
+app.use("/api", rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please wait a moment and try again." }
+}));
 
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "rootwise-api" }));
 
