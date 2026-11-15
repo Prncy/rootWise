@@ -1,7 +1,7 @@
 name: Build RootWise
 on:
   push:
-    branches: [main, feature/global-agriculture-mvp, "fix/**"]
+    branches: [main, feature/global-agriculture-mvp, "fix/**", "feature/**"]
   pull_request:
     branches: [main]
 jobs:
