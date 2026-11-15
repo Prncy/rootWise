@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import MapPicker from "./components/MapPicker.jsx";
 import { CROPS, GROUP_LABELS } from "./data/crops.js";
 import { getClimate, searchPlace, validateCoordinates } from "./lib/climate.js";
+import { getRainfallHistory } from "./lib/rainfallHistory.js";
 import { getSoil } from "./lib/api.js";
 import { buildRotations, calculateBudget, projectSeasons, rankCrops } from "./lib/agronomy.js";
 
@@ -31,6 +32,18 @@ export default function App() {
   const [theme, setTheme] = useState("light");
   const [showIntro, setShowIntro] = useState(true);
   const [scenario, setScenario] = useState("Average");
+  const [rainfallHistory, setRainfallHistory] = useState(null);
+  const [rainfallHistoryLoading, setRainfallHistoryLoading] = useState(false);
+  const [rainfallHistoryError, setRainfallHistoryError] = useState("");
+  const [activityLog, setActivityLog] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("rootwise-activity-log") || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch { return []; }
+  });
+  const [activityDraft, setActivityDraft] = useState({
+    date: new Date().toISOString().slice(0, 10), type: "Planting", crop: "", notes: ""
+  });
 
   const analysisFarm = useMemo(() => ({ ...farm, ph: farm.ph || (soil?.properties?.ph?.value != null ? String(soil.properties.ph.value) : "") }), [farm, soil]);
   const ranked = useMemo(() => rankCrops(analysisFarm, climate), [analysisFarm, climate]);
@@ -73,6 +86,11 @@ export default function App() {
     update("latitude", String(latitude)); update("longitude", String(longitude));
     if (label) update("place", label);
     setClimate(null); setSoil(null); setSoilError(""); setSoilLoading(true);
+    setRainfallHistory(null); setRainfallHistoryError(""); setRainfallHistoryLoading(true);
+    const rainfallRequest = getRainfallHistory(latitude, longitude)
+      .then(result => setRainfallHistory(result))
+      .catch(err => setRainfallHistoryError(err.message || "Historical rainfall data is unavailable."))
+      .finally(() => setRainfallHistoryLoading(false));
     const soilRequest = getSoil(latitude, longitude)
       .then(result => setSoil(result))
       .catch(err => setSoilError(err.message || "Estimated soil data is unavailable for this location."))
@@ -88,6 +106,7 @@ export default function App() {
     } finally {
       setBusy(false);
       void soilRequest;
+      void rainfallRequest;
     }
   }
 
@@ -113,6 +132,26 @@ export default function App() {
     );
   }
 
+  function addActivity(event) {
+    event.preventDefault();
+    if (!activityDraft.date || !activityDraft.type) return;
+    const entry = { ...activityDraft, id: Date.now() };
+    setActivityLog(current => {
+      const next = [entry, ...current].slice(0, 100);
+      try { localStorage.setItem("rootwise-activity-log", JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setActivityDraft({ date: new Date().toISOString().slice(0, 10), type: "Planting", crop: "", notes: "" });
+  }
+
+  function removeActivity(id) {
+    setActivityLog(current => {
+      const next = current.filter(item => item.id !== id);
+      try { localStorage.setItem("rootwise-activity-log", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
   function resetFarm() {
     setFarm(initialFarm); setClimate(null); setSoil(null); setSoilError(""); setPlaces([]); setError("");
     try { localStorage.removeItem("rootwise-farm"); } catch {}
@@ -121,7 +160,7 @@ export default function App() {
 
   const tabs = [
     ["overview", "Overview"], ["crops", "Crop explorer"], ["rotation", "Rotation planner"],
-    ["projection", "Season planner"], ["farm", "My farm"]
+    ["projection", "Season planner"], ["farm", "My farm"], ["log", "Field log"]
   ];
 
   return <div className={theme === "dark" ? "app dark" : "app"}>
@@ -183,6 +222,7 @@ export default function App() {
           <SoilSummary soil={soil} loading={soilLoading} error={soilError} />
           {climate && <div className="panel chart-panel"><div className="section-heading"><div><h3>Rainfall pattern</h3><p className="muted">Average monthly rainfall · millimetres</p></div><span className="data-chip">Historical</span></div><div className="rain-chart">{climate.monthlyRain.map((value, index) =>
             <div className="rain-column" key={index}><span>{Math.round(value)}</span><i style={{ height: Math.max(3, value / Math.max(...climate.monthlyRain, 1) * 100) + "%" }} /><small>{new Date(2000, index, 1).toLocaleString("en", { month: "short" })}</small></div>)}</div></div>}
+          <RainfallHistoryCard data={rainfallHistory} loading={rainfallHistoryLoading} error={rainfallHistoryError} />
           <div className="panel"><div className="section-heading"><div><p className="eyebrow">03 / CROP MATCH</p><h2>Top crop matches</h2></div><button className="text-button" onClick={() => setActiveTab("crops")}>Explore all crops ↗</button></div>
             {ranked.slice(0, 3).map(crop => <CropRow key={crop.name} crop={crop} />)}
             {!climate && <p className="muted small">Add a location and climate data to calculate a location-specific screening score.</p>}
@@ -225,6 +265,33 @@ export default function App() {
         </div>
       </section>}
 
+      {activeTab === "log" && <section className="page-panel">
+        <div className="section-heading"><div><p className="eyebrow">FIELD RECORDS</p><h2>Farm activity log</h2>
+          <p className="muted">Keep a simple record of work carried out on this farm.</p></div></div>
+        <div className="panel activity-panel">
+          <form className="activity-form" onSubmit={addActivity}>
+            <label>Date<input type="date" value={activityDraft.date} onChange={e => setActivityDraft(current => ({ ...current, date: e.target.value }))} required /></label>
+            <label>Activity<select value={activityDraft.type} onChange={e => setActivityDraft(current => ({ ...current, type: e.target.value }))}>
+              {["Land preparation", "Planting", "Irrigation", "Fertilising", "Weeding", "Pest or disease monitoring", "Spraying", "Harvesting", "Other"].map(type => <option key={type}>{type}</option>)}
+            </select></label>
+            <label>Crop (optional)<select value={activityDraft.crop} onChange={e => setActivityDraft(current => ({ ...current, crop: e.target.value }))}>
+              <option value="">Not specified</option>{CROPS.map(crop => <option key={crop.name}>{crop.name}</option>)}
+            </select></label>
+            <label className="activity-notes">Notes (optional)<textarea value={activityDraft.notes} onChange={e => setActivityDraft(current => ({ ...current, notes: e.target.value }))} rows="2" maxLength="500" placeholder="What was done? Add quantities or observations…" /></label>
+            <button className="button primary" type="submit">Save activity</button>
+          </form>
+        </div>
+        <div className="panel activity-list-panel">
+          <div className="section-heading"><div><h3>Recent activities</h3><p className="muted">{activityLog.length} of up to 100 saved records</p></div></div>
+          {activityLog.length ? <div className="activity-list">{activityLog.map(item => <article className="activity-entry" key={item.id}>
+            <div className="activity-date">{item.date}</div>
+            <div className="activity-entry-main"><b>{item.type}{item.crop ? " · " + item.crop : ""}</b>{item.notes && <p>{item.notes}</p>}</div>
+            <button className="text-button activity-remove" onClick={() => removeActivity(item.id)} aria-label={"Delete " + item.type + " activity"}>Remove</button>
+          </article>)}</div> : <div className="empty-state"><span>✎</span><h3>No activities recorded yet</h3><p>Add the first field activity above. Your records will appear here.</p></div>}
+          <p className="notice">Records are saved only in this browser on this device. They are not synced to a server or shared with other team members. Clearing browser data may remove them.</p>
+        </div>
+      </section>}
+
       <footer className="footer"><div className="footer-brand">rootwise<span>🌱</span></div><p>Practical agricultural insight, grounded in data and honest about uncertainty.</p><div><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a><a href="https://www.isda-africa.com/isdasoil/" target="_blank" rel="noreferrer">iSDAsoil</a><a href="https://www.fao.org/" target="_blank" rel="noreferrer">FAO</a></div><small>RootWise is a decision-support prototype, not a substitute for local agronomic advice.</small></footer>
     </main>
   </div>;
@@ -246,6 +313,31 @@ function IntroScreen({ onContinue }) {
     <p className="intro-tagline">Know your soil. Make more informed crop decisions.</p>
     <button className="intro-continue" onClick={onContinue}>Choose your farm location <span>→</span></button>
     <span className="intro-footnote">Practical agricultural insight, grounded in data.</span>
+  </section>;
+}
+
+
+function RainfallHistoryCard({ data, loading, error }) {
+  return <section className="panel rainfall-history-panel">
+    <div className="section-heading"><div><p className="eyebrow">CLIMATE RESILIENCE</p><h3>Rainfall history & dry spells</h3>
+      <p className="muted">Year-by-year comparison using historical reanalysis data.</p></div>
+      <span className="data-chip">{data ? data.years.length + " years" : loading ? "Loading…" : "Historical"}</span>
+    </div>
+    {loading && <p className="status-message">Loading up to 10 complete years of daily rainfall data…</p>}
+    {!loading && error && <p className="muted small">{error}</p>}
+    {!loading && data && <>
+      <div className="rainfall-baseline"><span>Average annual rainfall across available years</span><b>{Math.round(data.baselineMm).toLocaleString()} mm</b></div>
+      <div className="rainfall-history-head"><span>Year</span><span>Rainfall vs baseline</span><span>Longest dry spell</span></div>
+      <div className="rainfall-history-list">{data.years.map(year => <div className="rainfall-history-row" key={year.year}>
+        <div className="rainfall-year"><b>{year.year}</b><small>{year.status}</small></div>
+        <div className="rainfall-bar-cell"><div className="rainfall-bar"><i style={{ width: Math.max(2, Math.min(150, year.rainfallMm / Math.max(data.baselineMm, 1) * 100)) + "%" }} /></div>
+          <b>{Math.round(year.rainfallMm).toLocaleString()} mm</b></div>
+        <span className="dry-spell-value">{year.longestDrySpellDays} days</span>
+      </div>)}</div>
+      <p className="muted tiny">A dry day is defined here as 1 mm of precipitation or less. Dry-spell length is the longest consecutive run within each calendar year. Rainfall totals are compared with this location's average for the displayed years.</p>
+      <p className="muted tiny">{data.source}. Reanalysis estimates are not direct rain-gauge measurements; local conditions can differ.</p>
+    </>}
+    {!loading && !data && !error && <p className="muted small">Choose a location to load historical rainfall and dry-spell information.</p>}
   </section>;
 }
 
