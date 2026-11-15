@@ -1,5 +1,6 @@
-const ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
 import { summarizeRainfallHistory } from "./rainfallHistory.js";
+
+const ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
 
 export function validateCoordinates(latitude, longitude) {
   if (String(latitude).trim() === "" || String(longitude).trim() === "") return false;
