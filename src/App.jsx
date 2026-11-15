@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import MapPicker from "./components/MapPicker.jsx";
 import { CROPS, GROUP_LABELS } from "./data/crops.js";
 import { getClimate, searchPlace, validateCoordinates } from "./lib/climate.js";
 import { buildRotations, calculateBudget, projectSeasons, rankCrops } from "./lib/agronomy.js";
@@ -133,6 +134,8 @@ export default function App() {
           <button key={place.place_id || index} onClick={() => { setPlaces([]); chooseLocation(place.lat, place.lon, place.display_name); }}>
             <b>{place.name || place.display_name.split(",")[0]}</b><span>{place.display_name}</span>
           </button>)}</div>}
+        <div className="map-heading"><div><b>Pinpoint your field</b><span>Search above or click the map to choose a location.</span></div><span className="map-hint">OpenStreetMap</span></div>
+        <MapPicker latitude={farm.latitude} longitude={farm.longitude} onLocationPick={(lat, lon) => { update("latitude", String(lat)); update("longitude", String(lon)); setNotice("Map location selected. Analyse the coordinates to load climate data."); setError(""); }} />
         <div className="coordinate-row">
           <label>Latitude<input value={farm.latitude} onChange={e => update("latitude", e.target.value)} placeholder="e.g. -15.39" inputMode="decimal" /></label>
           <label>Longitude<input value={farm.longitude} onChange={e => update("longitude", e.target.value)} placeholder="e.g. 28.32" inputMode="decimal" /></label>
@@ -172,7 +175,7 @@ export default function App() {
 
       {activeTab === "crops" && <section className="panel page-panel"><div className="section-heading"><div><p className="eyebrow">CROP KNOWLEDGE</p><h2>Explore crop suitability</h2><p className="muted">Compare broad crop requirements with your location and soil information.</p></div></div>
         <div className="notice"><b>How to read these scores:</b> they are screening indicators, not probability of success or yield forecasts. Scores are based only on available inputs; missing factors are not treated as ideal conditions. Soil texture is saved in your profile but is not yet part of this score.</div>
-        <div className="crop-grid">{ranked.map(crop => <article className="crop-card" key={crop.name}><div className="crop-card-top"><span className="crop-icon">{crop.group === "legume" ? "◉" : crop.group === "cereal" ? "✳" : "❋"}</span><span className="group-pill">{GROUP_LABELS[crop.group]}</span></div><h3>{crop.name}</h3><p>{crop.note}</p><div className="crop-ranges"><span>pH <b>{crop.ph[0]}–{crop.ph[1]}</b></span><span>Temp <b>{crop.temp[0]}–{crop.temp[1]}°C</b></span><span>Rain <b>{crop.rain[0]}–{crop.rain[1]}mm</b></span></div><Score score={crop.score} /><p className="muted tiny">{crop.dataCoverage} of 3 screening factors available</p></article>)}</div>
+        <div className="crop-grid">{ranked.map(crop => <article className="crop-card" key={crop.name}><div className="crop-card-top"><span className="crop-icon">{crop.group === "legume" ? "◉" : crop.group === "cereal" ? "✳" : "❋"}</span><span className="group-pill">{GROUP_LABELS[crop.group]}</span></div><h3>{crop.name}</h3><p>{crop.note}</p><RecommendationDetails crop={crop} /><div className="crop-ranges"><span>pH <b>{crop.ph[0]}–{crop.ph[1]}</b></span><span>Temp <b>{crop.temp[0]}–{crop.temp[1]}°C</b></span><span>Rain <b>{crop.rain[0]}–{crop.rain[1]}mm</b></span></div><Score score={crop.score} /><p className="muted tiny">{crop.dataCoverage} of 3 screening factors available</p></article>)}</div>
       </section>}
 
       {activeTab === "rotation" && <section className="page-panel"><div className="section-heading"><div><p className="eyebrow">PLAN FOR THE SOIL</p><h2>Rotation planner</h2><p className="muted">Use recent crop history to avoid repeating the same crop and include a legume phase where suitable.</p></div></div>
@@ -207,5 +210,13 @@ function Score({ score }) {
   return <div className="score-wrap"><div className="score-label"><span>Screening score</span><b>{score}/100</b></div><div className="score-track"><i style={{ width: score + "%" }} /></div></div>;
 }
 function CropRow({ crop }) {
-  return <article className="crop-row"><div className="crop-row-icon">{crop.group === "legume" ? "◉" : "✳"}</div><div className="crop-row-main"><div><b>{crop.name}</b><span className="group-pill">{GROUP_LABELS[crop.group]}</span></div><p>{crop.note}</p></div><div className="crop-row-score">{crop.score == null ? "—" : crop.score + "/100"}</div></article>;
+  return <article className="crop-row"><div className="crop-row-icon">{crop.group === "legume" ? "◉" : "✳"}</div><div className="crop-row-main"><div><b>{crop.name}</b><span className="group-pill">{GROUP_LABELS[crop.group]}</span></div><p>{crop.note}</p><RecommendationDetails crop={crop} compact /></div><div className="crop-row-score">{crop.score == null ? "—" : crop.score + "/100"}</div></article>;
+}
+function RecommendationDetails({ crop, compact = false }) {
+  if (crop.score == null) return <p className="recommendation-muted">Choose a location to compare this crop with local climate conditions.</p>;
+  return <div className={compact ? "recommendation-details compact" : "recommendation-details"}>
+    {crop.reasons?.length > 0 && <ul>{crop.reasons.slice(0, compact ? 2 : 3).map((reason, index) => <li key={index}>{reason}</li>)}</ul>}
+    {crop.cautions?.length > 0 && <p className="recommendation-caution">Consider: {crop.cautions[0]}</p>}
+    {crop.missingFactors?.length > 0 && <p className="recommendation-muted">Not checked: {crop.missingFactors.join(", ")}.</p>}
+  </div>;
 }
