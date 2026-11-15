@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import MapPicker from "./components/MapPicker.jsx";
 import { CROPS, GROUP_LABELS } from "./data/crops.js";
 import { getClimate, searchPlace, validateCoordinates } from "./lib/climate.js";
+import { getSoil } from "./lib/api.js";
 import { buildRotations, calculateBudget, projectSeasons, rankCrops } from "./lib/agronomy.js";
 
 const initialFarm = {
@@ -18,6 +19,9 @@ export default function App() {
     catch { return initialFarm; }
   });
   const [climate, setClimate] = useState(null);
+  const [soil, setSoil] = useState(null);
+  const [soilLoading, setSoilLoading] = useState(false);
+  const [soilError, setSoilError] = useState("");
   const [placeQuery, setPlaceQuery] = useState("");
   const [places, setPlaces] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -58,16 +62,23 @@ export default function App() {
     setBusy(true); setError(""); setNotice("Loading recent climate observations…");
     update("latitude", String(latitude)); update("longitude", String(longitude));
     if (label) update("place", label);
-    setClimate(null);
+    setClimate(null); setSoil(null); setSoilError(""); setSoilLoading(true);
+    const soilRequest = getSoil(latitude, longitude)
+      .then(result => setSoil(result))
+      .catch(err => setSoilError(err.message || "Estimated soil data is unavailable for this location."))
+      .finally(() => setSoilLoading(false));
     try {
       const result = await getClimate(Number(latitude), Number(longitude));
       setClimate(result);
-      setNotice("Climate history loaded. Add soil-test values for a more complete comparison.");
+      setNotice("Climate history loaded. Available soil estimates are shown below.");
       setActiveTab("overview");
     } catch (err) {
       setError(err.message || "Could not load climate data.");
       setNotice("Location saved, but climate data is currently unavailable.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+      void soilRequest;
+    }
   }
 
   async function findPlaces(event) {
@@ -93,7 +104,7 @@ export default function App() {
   }
 
   function resetFarm() {
-    setFarm(initialFarm); setClimate(null); setPlaces([]); setError("");
+    setFarm(initialFarm); setClimate(null); setSoil(null); setSoilError(""); setPlaces([]); setError("");
     try { localStorage.removeItem("rootwise-farm"); } catch {}
     setNotice("Farm details cleared from this device.");
   }
@@ -159,6 +170,7 @@ export default function App() {
             <Metric label="Mean daily high" value={number(climate.meanMax)} unit="°C" note="Daily maximum average" />
             <Metric label="Mean daily low" value={number(climate.meanMin)} unit="°C" note="Daily minimum average" />
           </div> : <div className="empty-state"><span>☼</span><h3>Climate information appears here</h3><p>Choose a location above to retrieve recent historical climate observations.</p></div>}
+          <SoilSummary soil={soil} loading={soilLoading} error={soilError} />
           {climate && <div className="panel chart-panel"><div className="section-heading"><div><h3>Rainfall pattern</h3><p className="muted">Average monthly rainfall · millimetres</p></div><span className="data-chip">Historical</span></div><div className="rain-chart">{climate.monthlyRain.map((value, index) =>
             <div className="rain-column" key={index}><span>{Math.round(value)}</span><i style={{ height: Math.max(3, value / Math.max(...climate.monthlyRain, 1) * 100) + "%" }} /><small>{new Date(2000, index, 1).toLocaleString("en", { month: "short" })}</small></div>)}</div></div>}
           <div className="panel"><div className="section-heading"><div><p className="eyebrow">03 / CROP MATCH</p><h2>Top crop matches</h2></div><button className="text-button" onClick={() => setActiveTab("crops")}>Explore all crops ↗</button></div>
@@ -193,11 +205,11 @@ export default function App() {
 
       {activeTab === "farm" && <section className="page-panel"><div className="section-heading"><div><p className="eyebrow">YOUR FARM PROFILE</p><h2>Farm information</h2><p className="muted">Your entries are saved in this browser on this device.</p></div></div>
         <div className="panel form-panel"><div className="form-grid"><label>Farm name or location<input value={farm.place} onChange={e => update("place", e.target.value)} placeholder="My farm" /></label><label>Farm area<input type="number" min="0.01" step="any" value={farm.area} onChange={e => update("area", e.target.value)} /></label><label>Area unit<select value={farm.areaUnit} onChange={e => update("areaUnit", e.target.value)}><option>ha</option><option>acres</option></select></label><label>Soil pH<input type="number" min="3" max="10" step="0.1" value={farm.ph} onChange={e => update("ph", e.target.value)} placeholder="From a soil test" /></label><label>Soil texture<select value={farm.texture} onChange={e => update("texture", e.target.value)}><option>Unknown</option><option>Sandy</option><option>Loamy</option><option>Clay</option><option>Silty</option></select></label><label>Organic matter (%)<input type="number" min="0" max="100" step="0.1" value={farm.organicMatter} onChange={e => update("organicMatter", e.target.value)} placeholder="From a soil test" /></label></div>
-          <div className="notice"><b>Soil data source:</b> enter values from a laboratory soil test if available. Texture and pH have not been automatically measured by RootWise.</div><button className="button danger-outline" onClick={resetFarm}>Clear farm data on this device</button>
+          <div className="notice"><b>Soil data source:</b> values entered here are your own measurements. Automatic iSDAsoil estimates appear on the Overview when available. Modelled estimates are not a substitute for a laboratory soil test.</div><button className="button danger-outline" onClick={resetFarm}>Clear farm data on this device</button>
         </div>
       </section>}
 
-      <footer className="footer"><div className="footer-brand">rootwise<span>🌱</span></div><p>Practical agricultural insight, grounded in data and honest about uncertainty.</p><div><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a><a href="https://www.fao.org/" target="_blank" rel="noreferrer">FAO</a></div><small>RootWise is a decision-support prototype, not a substitute for local agronomic advice.</small></footer>
+      <footer className="footer"><div className="footer-brand">rootwise<span>🌱</span></div><p>Practical agricultural insight, grounded in data and honest about uncertainty.</p><div><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a><a href="https://www.isda-africa.com/isdasoil/" target="_blank" rel="noreferrer">iSDAsoil</a><a href="https://www.fao.org/" target="_blank" rel="noreferrer">FAO</a></div><small>RootWise is a decision-support prototype, not a substitute for local agronomic advice.</small></footer>
     </main>
   </div>;
 }
@@ -219,4 +231,30 @@ function RecommendationDetails({ crop, compact = false }) {
     {crop.cautions?.length > 0 && <p className="recommendation-caution">Consider: {crop.cautions[0]}</p>}
     {crop.missingFactors?.length > 0 && <p className="recommendation-muted">Not checked: {crop.missingFactors.join(", ")}.</p>}
   </div>;
+}
+function SoilSummary({ soil, loading, error }) {
+  const properties = soil?.properties || {};
+  const hasSoil = Object.keys(properties).length > 0;
+  const value = key => properties[key]?.value;
+  return <section className="panel soil-panel">
+    <div className="section-heading">
+      <div><p className="eyebrow">SOIL INTELLIGENCE</p><h3>Estimated soil properties</h3>
+        <p className="muted">Topsoil estimates for the selected map location</p></div>
+      <span className="data-chip">{loading ? "Retrieving…" : hasSoil ? "Estimated data" : "Awaiting data"}</span>
+    </div>
+    {loading && <p className="status-message">Retrieving soil information for this location…</p>}
+    {!loading && hasSoil && <>
+      <div className="soil-metrics">
+        {properties.ph && <div><span>Soil pH</span><b>{number(value("ph"))}</b></div>}
+        {properties.carbon_organic && <div><span>Organic carbon</span><b>{number(value("carbon_organic"))}</b><small>Provider units</small></div>}
+        {properties.sand && <div><span>Sand</span><b>{number(value("sand"))}</b><small>Provider units</small></div>}
+        {properties.silt && <div><span>Silt</span><b>{number(value("silt"))}</b><small>Provider units</small></div>}
+        {properties.clay && <div><span>Clay</span><b>{number(value("clay"))}</b><small>Provider units</small></div>}
+      </div>
+      <p className="muted tiny">{soil.source} · {soil.depth} · {soil.resolution}. {soil.notes}</p>
+      <p className="muted tiny">These are model predictions with uncertainty, not direct measurements from your field.</p>
+    </>}
+    {!loading && !hasSoil && <p className="muted small">{error || "Soil estimates will appear here when the soil-data service is configured and the location is covered."} You can still enter laboratory soil-test results in My farm.</p>}
+    <p className="source-note"><a href="https://www.isda-africa.com/isdasoil/" target="_blank" rel="noreferrer">About iSDAsoil data ↗</a></p>
+  </section>;
 }
