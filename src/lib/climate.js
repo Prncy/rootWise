@@ -1,4 +1,5 @@
 const ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
+import { summarizeRainfallHistory } from "./rainfallHistory.js";
 
 export function validateCoordinates(latitude, longitude) {
   if (String(latitude).trim() === "" || String(longitude).trim() === "") return false;
@@ -36,6 +37,34 @@ export async function getClimate(latitude, longitude) {
   return summarizeClimate(await response.json());
 }
 
+export async function getClimateBundle(latitude, longitude) {
+  if (!validateCoordinates(latitude, longitude)) {
+    throw new Error("Enter a valid latitude (-90 to 90) and longitude (-180 to 180).");
+  }
+
+  // One 10-year request supplies both the recent five-year climate summary
+  // and the longer rainfall/dry-spell comparison.
+  const endYear = new Date().getUTCFullYear() - 1;
+  const startYear = endYear - 9;
+  const url = new URL(ARCHIVE);
+  url.search = new URLSearchParams({
+    latitude: String(Number(latitude)),
+    longitude: String(Number(longitude)),
+    start_date: startYear + "-01-01",
+    end_date: endYear + "-12-31",
+    daily: "precipitation_sum,temperature_2m_mean,temperature_2m_max,temperature_2m_min",
+    timezone: "auto"
+  }).toString();
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Climate service returned " + response.status);
+  const payload = await response.json();
+  return {
+    climate: summarizeClimate(payload),
+    rainfallHistory: summarizeRainfallHistory(payload)
+  };
+}
+
 export function summarizeClimate(payload) {
   const daily = payload?.daily;
   if (!daily?.time?.length) {
@@ -66,7 +95,8 @@ export function summarizeClimate(payload) {
     throw new Error("There are not enough complete daily rainfall observations to calculate an annual average.");
   }
 
-  const validIndices = new Set(validYears.flatMap(([, stats]) => stats.indices));
+  const climateYears = validYears.slice(-5);
+  const validIndices = new Set(climateYears.flatMap(([, stats]) => stats.indices));
   const average = values => {
     const usable = values.filter(Number.isFinite);
     return usable.length
@@ -74,8 +104,8 @@ export function summarizeClimate(payload) {
       : null;
   };
 
-  const annualRain = average(validYears.map(([, stats]) => stats.rain));
-  const monthlyByYear = validYears.map(([, stats]) => {
+  const annualRain = average(climateYears.map(([, stats]) => stats.rain));
+  const monthlyByYear = climateYears.map(([, stats]) => {
     const months = Array(12).fill(0);
     daily.time.forEach((day, index) => {
       if (!stats.indices.includes(index)) return;
@@ -92,9 +122,9 @@ export function summarizeClimate(payload) {
   const meanFor = key => average(daily[key]?.filter((_, index) => validIndices.has(index)) || []);
 
   return {
-    years: validYears.length,
-    start: validYears[0][0] + "-01-01",
-    end: validYears[validYears.length - 1][0] + "-12-31",
+    years: climateYears.length,
+    start: climateYears[0][0] + "-01-01",
+    end: climateYears[climateYears.length - 1][0] + "-12-31",
     annualRain,
     meanTemp: meanFor("temperature_2m_mean"),
     meanMax: meanFor("temperature_2m_max"),
