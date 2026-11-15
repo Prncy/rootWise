@@ -30,9 +30,10 @@ export default function App() {
   const [notice, setNotice] = useState("Choose a farm location to begin.");
   const [theme, setTheme] = useState("light");
 
-  const ranked = useMemo(() => rankCrops(farm, climate), [farm, climate]);
+  const analysisFarm = useMemo(() => ({ ...farm, ph: farm.ph || (soil?.properties?.ph?.value != null ? String(soil.properties.ph.value) : "") }), [farm, soil]);
+  const ranked = useMemo(() => rankCrops(analysisFarm, climate), [analysisFarm, climate]);
   const rotations = useMemo(() => buildRotations(ranked, farm.history), [ranked, farm.history]);
-  const projection = useMemo(() => projectSeasons(rotations, farm, climate), [rotations, farm, climate]);
+  const projection = useMemo(() => projectSeasons(rotations, analysisFarm, climate), [rotations, analysisFarm, climate]);
   const budget = useMemo(() => calculateBudget({
     area: farm.areaUnit === "acres" ? Number(farm.area) * 0.404686 : farm.area,
     yieldPerHa: farm.yieldPerHa, pricePerKg: farm.pricePerKg, costPerHa: farm.costPerHa
@@ -179,7 +180,7 @@ export default function App() {
           </div>
         </div>
         <aside className="side-column">
-          <div className="panel dark-panel"><p className="eyebrow">YOUR FARM SNAPSHOT</p><h3>{farm.place || "No location selected"}</h3><p>{climate ? "Recent climate history is available for this location." : "Select a location to begin building your farm profile."}</p><div className="snapshot-line"><span>Soil pH</span><b>{farm.ph || "Not entered"}</b></div><div className="snapshot-line"><span>Soil texture</span><b>{farm.texture}</b></div><div className="snapshot-line"><span>Farm area</span><b>{farm.area || "—"} {farm.areaUnit}</b></div><button className="button light-button" onClick={() => setActiveTab("farm")}>Update farm profile</button></div>
+          <div className="panel dark-panel"><p className="eyebrow">YOUR FARM SNAPSHOT</p><h3>{farm.place || "No location selected"}</h3><p>{climate ? "Recent climate history is available for this location." : "Select a location to begin building your farm profile."}</p><div className="snapshot-line"><span>Soil pH</span><b>{farm.ph || (soil?.properties?.ph?.value != null ? `${number(soil.properties.ph.value)} (estimated)` : "Not entered")}</b></div><div className="snapshot-line"><span>Soil texture</span><b>{farm.texture}</b></div><div className="snapshot-line"><span>Farm area</span><b>{farm.area || "—"} {farm.areaUnit}</b></div><button className="button light-button" onClick={() => setActiveTab("farm")}>Update farm profile</button></div>
           <div className="panel insight-panel"><span className="insight-icon">✳</span><h3>One important distinction</h3><p>Climate data describes the wider area around your location. It does not replace a field-level soil test or advice from a local agronomist.</p></div>
           <div className="source-note"><b>Climate source</b><br />{climate ? climate.source + " · " + climate.start + " to " + climate.end : "No climate source loaded yet."}<br /><a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noreferrer">Data documentation ↗</a></div>
         </aside>
