@@ -24,7 +24,17 @@ export function scoreCrop(crop, farm, climate) {
   const score = availableWeight
     ? Math.round(factors.reduce((sum, item) => sum + item.score * item.weight, 0) / availableWeight)
     : null;
-  return { ...crop, score, factors, dataCoverage: factors.length };
+  const reasons = factors.filter(item => item.score >= 70).map(item =>
+    `${item.name} is within or close to this crop’s broad reference range.`
+  );
+  const cautions = factors.filter(item => item.score < 70).map(item =>
+    `${item.name} is outside this crop’s broad reference range.`
+  );
+  const missingFactors = [];
+  if (!factors.some(item => item.name === "Soil pH")) missingFactors.push("soil pH");
+  if (!factors.some(item => item.name === "Mean temperature")) missingFactors.push("temperature");
+  if (!factors.some(item => item.name === "Annual rainfall")) missingFactors.push("rainfall");
+  return { ...crop, score, factors, reasons, cautions, missingFactors, dataCoverage: factors.length };
 }
 
 export function rankCrops(farm, climate) {
