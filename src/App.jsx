@@ -253,7 +253,7 @@ function SoilSummary({ soil, loading, error }) {
         {properties.clay && <div><span>Clay</span><b>{number(value("clay"))}</b><small>Provider units</small></div>}
       </div>
       <p className="muted tiny">{soil.source} · {soil.depth} · {soil.resolution}. {soil.notes}</p>
-      <p className="muted tiny">These are model predictions with uncertainty, not direct measurements from your field.</p>
+      <p className="muted tiny">These are model predictions with uncertainty, not direct measurements from your field. iSDAsoil data is provided under CC BY 4.0.</p>
     </>}
     {!loading && !hasSoil && <p className="muted small">{error || "Soil estimates will appear here when the soil-data service is configured and the location is covered."} You can still enter laboratory soil-test results in My farm.</p>}
     <p className="source-note"><a href="https://www.isda-africa.com/isdasoil/" target="_blank" rel="noreferrer">About iSDAsoil data ↗</a></p>
