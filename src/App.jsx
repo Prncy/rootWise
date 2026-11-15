@@ -164,6 +164,7 @@ export default function App() {
   ];
 
   return <div className={theme === "dark" ? "app dark" : "app"}>
+    {showIntro && <IntroScreen onContinue={() => setShowIntro(false)} />}
     <header className="topbar">
       <a className="brand" href="#" onClick={e => { e.preventDefault(); setActiveTab("overview"); }}>
         <span className="brand-mark">r</span><span>rootwise<small>GROW WITH BETTER INFORMATION</small></span>
