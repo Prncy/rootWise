@@ -29,11 +29,20 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("overview");
   const [notice, setNotice] = useState("Choose a farm location to begin.");
   const [theme, setTheme] = useState("light");
+  const [showIntro, setShowIntro] = useState(true);
+  const [scenario, setScenario] = useState("Average");
 
   const analysisFarm = useMemo(() => ({ ...farm, ph: farm.ph || (soil?.properties?.ph?.value != null ? String(soil.properties.ph.value) : "") }), [farm, soil]);
   const ranked = useMemo(() => rankCrops(analysisFarm, climate), [analysisFarm, climate]);
   const rotations = useMemo(() => buildRotations(ranked, farm.history), [ranked, farm.history]);
-  const projection = useMemo(() => projectSeasons(rotations, analysisFarm, climate), [rotations, analysisFarm, climate]);
+  const scenarioClimate = useMemo(() => {
+    if (!climate) return null;
+    const factor = scenario === "Wetter" ? 1.2 : scenario === "Drier" ? 0.8 : 1;
+    return { ...climate, annualRain: climate.annualRain * factor };
+  }, [climate, scenario]);
+  const scenarioRanked = useMemo(() => rankCrops(analysisFarm, scenarioClimate), [analysisFarm, scenarioClimate]);
+  const scenarioRotations = useMemo(() => buildRotations(scenarioRanked, farm.history), [scenarioRanked, farm.history]);
+  const projection = useMemo(() => projectSeasons(scenarioRotations, analysisFarm), [scenarioRotations, analysisFarm]);
   const budget = useMemo(() => calculateBudget({
     area: farm.areaUnit === "acres" ? Number(farm.area) * 0.404686 : farm.area,
     yieldPerHa: farm.yieldPerHa, pricePerKg: farm.pricePerKg, costPerHa: farm.costPerHa
@@ -197,8 +206,14 @@ export default function App() {
         <div className="notice"><b>Rotation reminder:</b> a legume can contribute nitrogen, but the amount depends on species, inoculation, biomass, residue management and soil conditions. Rotation alone does not guarantee improved fertility or disease control.</div>
       </section>}
 
-      {activeTab === "projection" && <section className="page-panel"><div className="section-heading"><div><p className="eyebrow">LOOK AHEAD</p><h2>Six-season plan</h2><p className="muted">A planning sequence to help you think beyond the next harvest.</p></div></div>
-        {projection.length ? <><div className="panel season-panel"><div className="season-list">{projection.map(item => <div className="season-item" key={item.season}><span className="season-index">0{item.season}</span><div className="season-details"><b>{item.crop}</b><span>Crop-fit screening: {item.fit ?? "Not available"}/100</span></div><div className="fertility-meter"><i style={{ width: item.fertility + "%" }} /></div><b className="fertility-value">{item.fertility}</b></div>)}</div></div><div className="notice warning"><b>Important:</b> the soil indicator is a simplified illustrative index based on crop groups. It is not a measured soil nutrient balance, fertility forecast or predicted yield. Use soil tests and local agronomic guidance for input decisions.</div></> : <div className="empty-state"><h3>Build your farm profile first</h3><p>Choose a location and add soil information to create a crop sequence.</p></div>}
+      {activeTab === "projection" && <section className="page-panel"><div className="section-heading"><div><p className="eyebrow">LOOK AHEAD</p><h2>Six-season outlook</h2><p className="muted">Explore how a different rainfall pattern could change your crop choices.</p></div></div>
+        <div className="panel scenario-panel"><div className="scenario-heading"><div><b>Test a rainfall scenario</b><p className="muted">These are illustrative stress tests, not weather forecasts.</p></div><span className="data-chip">Rainfall sensitivity</span></div>
+          <div className="scenario-options" role="group" aria-label="Rainfall scenario">
+            {["Average", "Wetter", "Drier"].map(option => <button key={option} className={scenario === option ? "selected" : ""} onClick={() => setScenario(option)} disabled={!climate}>{option === "Average" ? "Average conditions" : option === "Wetter" ? "Wetter (+20%)" : "Drier (−20%)"}</button>)}
+          </div>
+          {!climate && <p className="muted small">Analyse a farm location first to activate the scenario comparison.</p>}
+        </div>
+        {projection.length ? <><div className="panel season-panel"><div className="scenario-summary"><div><span>Scenario</span><b>{scenario}</b></div><div><span>Rainfall input</span><b>{scenario === "Wetter" ? "+20%" : scenario === "Drier" ? "−20%" : "Baseline"}</b></div><div><span>Selected rotation</span><b>{scenarioRotations.length ? scenarioRotations.map(item => item.name).join(" → ") : "Not available"}</b></div></div><div className="season-list">{projection.map(item => <div className="season-item" key={item.season}><span className="season-index">0{item.season}</span><div className="season-details"><b>{item.crop}</b><span>Crop-fit screening: {item.fit ?? "Not available"}/100 · Illustrative soil indicator: {item.fertility}/100</span></div><div className="fertility-meter" role="img" aria-label={"Illustrative soil indicator " + item.fertility + " out of 100"}><i style={{ width: item.fertility + "%" }} /></div><b className="fertility-value">{item.fertility}</b></div>)}</div></div><div className="notice warning"><b>Read this carefully:</b> the crop-fit score is a screening comparison based on broad reference ranges. The soil indicator is a simplified planning aid based on crop groups and farm entries. Neither is a measured soil nutrient balance, yield prediction or guaranteed outcome. The wetter/drier options simply adjust the historical rainfall input by 20%; they do not represent a climate forecast.</div></> : <div className="empty-state"><h3>Build your farm profile first</h3><p>Choose a location and add soil information to create a crop sequence.</p></div>}
         <div className="panel budget-panel"><p className="eyebrow">OPTIONAL FARM ECONOMICS</p><h3>Estimate a simple gross margin</h3><p className="muted">Enter your own expected yield, selling price and production costs. This does not use assumed global prices.</p><div className="budget-fields"><label>Currency<select value={farm.currency} onChange={e => update("currency", e.target.value)}>{["USD","ZMW","INR","BRL","KES","GHS","NGN","EUR","GBP","AUD","CAD"].map(c => <option key={c}>{c}</option>)}</select></label><label>Expected yield (kg/ha)<input type="number" min="0" value={farm.yieldPerHa} onChange={e => update("yieldPerHa", e.target.value)} placeholder="e.g. 2500" /></label><label>Selling price per kg<input type="number" min="0" step="0.01" value={farm.pricePerKg} onChange={e => update("pricePerKg", e.target.value)} placeholder="Your local price" /></label><label>Production cost per ha<input type="number" min="0" value={farm.costPerHa} onChange={e => update("costPerHa", e.target.value)} placeholder="Seeds, labour, inputs…" /></label></div>
           {budget ? <div className="budget-result"><div><span>Estimated gross revenue</span><b>{money(budget.revenue, farm.currency)}</b></div><div><span>Estimated costs</span><b>{money(budget.costs, farm.currency)}</b></div><div className="margin-result"><span>Gross margin</span><b>{money(budget.grossMargin, farm.currency)}</b></div><small>For {farm.areaUnit === "acres" ? number(Number(farm.area) * 0.404686) + " ha" : farm.area + " ha"} · before overheads, finance, taxes and post-harvest losses.</small></div> : <p className="muted small">Complete all four fields to calculate a gross margin.</p>}
         </div>
@@ -213,6 +228,25 @@ export default function App() {
       <footer className="footer"><div className="footer-brand">rootwise<span>🌱</span></div><p>Practical agricultural insight, grounded in data and honest about uncertainty.</p><div><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a><a href="https://www.isda-africa.com/isdasoil/" target="_blank" rel="noreferrer">iSDAsoil</a><a href="https://www.fao.org/" target="_blank" rel="noreferrer">FAO</a></div><small>RootWise is a decision-support prototype, not a substitute for local agronomic advice.</small></footer>
     </main>
   </div>;
+}
+
+function IntroScreen({ onContinue }) {
+  return <section className="intro-screen" aria-label="RootWise welcome animation">
+    <div className="intro-art">
+      <div className="intro-orbit"><div className="intro-globe"><span className="globe-land land-one" /><span className="globe-land land-two" /><span className="globe-land land-three" /></div></div>
+      <svg className="intro-plant" viewBox="0 0 100 110" aria-hidden="true">
+        <path className="intro-stem" d="M50 105 C50 78 49 52 50 28" />
+        <path className="intro-leaf leaf-left" d="M50 68 C28 67 13 53 12 37 C32 37 47 49 50 68Z" />
+        <path className="intro-leaf leaf-right" d="M50 53 C72 52 87 38 88 22 C68 23 53 35 50 53Z" />
+        <path className="intro-leaf leaf-top" d="M50 30 C39 18 43 7 50 2 C57 9 61 20 50 30Z" />
+      </svg>
+    </div>
+    <p className="intro-kicker">SOIL · CLIMATE · CROPS</p>
+    <h1>RootWise</h1>
+    <p className="intro-tagline">Know your soil. Make more informed crop decisions.</p>
+    <button className="intro-continue" onClick={onContinue}>Choose your farm location <span>→</span></button>
+    <span className="intro-footnote">Practical agricultural insight, grounded in data.</span>
+  </section>;
 }
 
 function Metric({ label, value, unit, note }) {
