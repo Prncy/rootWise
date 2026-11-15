@@ -104,10 +104,4 @@ export function summarizeClimate(payload) {
   };
 }
 
-export async function searchPlace(query) {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.search = new URLSearchParams({ q: query, format: "jsonv2", limit: "5" }).toString();
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error("Place search failed. Try entering coordinates instead.");
-  return response.json();
-}
+export { searchPlace } from "./api.js";
