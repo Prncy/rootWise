@@ -63,3 +63,43 @@
 .scenario-summary b{font-size:11px;overflow-wrap:anywhere}
 @media(max-width:560px){.intro-art{transform:scale(.88);margin-top:-10px;margin-bottom:0}.intro-tagline{max-width:280px}.scenario-summary{grid-template-columns:1fr 1fr}.scenario-summary>div:last-child{grid-column:1/-1}.scenario-heading .data-chip{display:none}.scenario-options button{flex:1;padding:10px 6px}}
 @media(prefers-reduced-motion:reduce){.intro-orbit,.intro-globe:before,.intro-stem,.intro-leaf,.intro-kicker,.intro-screen h1,.intro-tagline,.intro-continue,.intro-footnote{animation:none!important}.intro-stem{stroke-dashoffset:0}.intro-leaf{transform:scale(1)}.intro-continue{opacity:1}}
+
+
+/* Historical rainfall and dry-spell analysis */
+.rainfall-history-panel{margin:16px 0}
+.rainfall-baseline{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--soft);border-radius:10px;margin:12px 0}
+.rainfall-baseline span{font-size:10px;color:var(--muted)}
+.rainfall-baseline b{font:800 17px Manrope;color:var(--green2);white-space:nowrap}
+.rainfall-history-head,.rainfall-history-row{display:grid;grid-template-columns:82px minmax(130px,1fr) 105px;gap:12px;align-items:center}
+.rainfall-history-head{padding:8px 4px;color:var(--muted);font-size:9px;border-bottom:1px solid var(--line)}
+.rainfall-history-row{padding:10px 4px;border-bottom:1px solid var(--line)}
+.rainfall-year{display:flex;flex-direction:column;gap:3px}
+.rainfall-year b{font:700 12px Manrope}
+.rainfall-year small{font-size:9px;color:var(--muted)}
+.rainfall-bar-cell{display:grid;grid-template-columns:minmax(50px,1fr) 68px;gap:9px;align-items:center}
+.rainfall-bar{height:8px;background:var(--soft);border-radius:10px;overflow:hidden}
+.rainfall-bar i{display:block;height:100%;background:#78a86c;border-radius:10px}
+.rainfall-bar-cell>b{font-size:10px;text-align:right;white-space:nowrap}
+.dry-spell-value{font-size:10px;color:var(--muted);text-align:right}
+.activity-panel,.activity-list-panel{margin-bottom:15px}
+.activity-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:end}
+.activity-form label{display:flex;flex-direction:column;gap:6px;font-size:10px;color:var(--muted);font-weight:700}
+.activity-form input,.activity-form select,.activity-form textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:11px;background:var(--surface);color:var(--text);font:inherit;font-size:12px}
+.activity-form textarea{resize:vertical}
+.activity-notes{grid-column:1/-1}
+.activity-form>.button{justify-self:start}
+.activity-entry{display:grid;grid-template-columns:95px minmax(0,1fr) auto;gap:13px;align-items:start;padding:14px 0;border-bottom:1px solid var(--line)}
+.activity-date{font-size:10px;color:var(--muted);padding-top:2px}
+.activity-entry-main b{font:700 12px Manrope}
+.activity-entry-main p{font-size:11px;color:var(--muted);line-height:1.5;margin:5px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.activity-remove{font-size:10px}
+@media(max-width:560px){
+  .rainfall-history-head,.rainfall-history-row{grid-template-columns:58px minmax(95px,1fr) 76px;gap:7px}
+  .rainfall-bar-cell{grid-template-columns:minmax(30px,1fr) 55px;gap:5px}
+  .rainfall-year small{font-size:8px}
+  .rainfall-bar-cell>b,.dry-spell-value{font-size:9px}
+  .activity-form{grid-template-columns:1fr 1fr}
+  .activity-notes{grid-column:1/-1}
+  .activity-entry{grid-template-columns:68px minmax(0,1fr);gap:8px}
+  .activity-remove{grid-column:2;justify-self:start}
+}
