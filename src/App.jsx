@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import MapPicker from "./components/MapPicker.jsx";
 import { CROPS, GROUP_LABELS } from "./data/crops.js";
-import { getClimate, searchPlace, validateCoordinates } from "./lib/climate.js";
-import { getRainfallHistory } from "./lib/rainfallHistory.js";
+import { getClimateBundle, searchPlace, validateCoordinates } from "./lib/climate.js";
 import { getSoil } from "./lib/api.js";
 import { buildRotations, calculateBudget, projectSeasons, rankCrops } from "./lib/agronomy.js";
 
@@ -13,6 +12,10 @@ const initialFarm = {
 };
 const money = (value, currency) => new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
 const number = value => new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+const localDateString = () => {
+  const date = new Date();
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+};
 
 export default function App() {
   const [farm, setFarm] = useState(() => {
@@ -42,7 +45,7 @@ export default function App() {
     } catch { return []; }
   });
   const [activityDraft, setActivityDraft] = useState({
-    date: new Date().toISOString().slice(0, 10), type: "Planting", crop: "", notes: ""
+    date: localDateString(), type: "Planting", crop: "", notes: ""
   });
 
   const analysisFarm = useMemo(() => ({ ...farm, ph: farm.ph || (soil?.properties?.ph?.value != null ? String(soil.properties.ph.value) : "") }), [farm, soil]);
@@ -87,26 +90,25 @@ export default function App() {
     if (label) update("place", label);
     setClimate(null); setSoil(null); setSoilError(""); setSoilLoading(true);
     setRainfallHistory(null); setRainfallHistoryError(""); setRainfallHistoryLoading(true);
-    const rainfallRequest = getRainfallHistory(latitude, longitude)
-      .then(result => setRainfallHistory(result))
-      .catch(err => setRainfallHistoryError(err.message || "Historical rainfall data is unavailable."))
-      .finally(() => setRainfallHistoryLoading(false));
     const soilRequest = getSoil(latitude, longitude)
       .then(result => setSoil(result))
       .catch(err => setSoilError(err.message || "Estimated soil data is unavailable for this location."))
       .finally(() => setSoilLoading(false));
     try {
-      const result = await getClimate(Number(latitude), Number(longitude));
-      setClimate(result);
+      const result = await getClimateBundle(Number(latitude), Number(longitude));
+      setClimate(result.climate);
+      setRainfallHistory(result.rainfallHistory);
+      setRainfallHistoryLoading(false);
       setNotice("Climate history loaded. Available soil estimates are shown below.");
       setActiveTab("overview");
     } catch (err) {
       setError(err.message || "Could not load climate data.");
+      setRainfallHistoryError(err.message || "Historical rainfall data is unavailable.");
+      setRainfallHistoryLoading(false);
       setNotice("Location saved, but climate data is currently unavailable.");
     } finally {
       setBusy(false);
       void soilRequest;
-      void rainfallRequest;
     }
   }
 
@@ -141,7 +143,7 @@ export default function App() {
       try { localStorage.setItem("rootwise-activity-log", JSON.stringify(next)); } catch {}
       return next;
     });
-    setActivityDraft({ date: new Date().toISOString().slice(0, 10), type: "Planting", crop: "", notes: "" });
+    setActivityDraft({ date: localDateString(), type: "Planting", crop: "", notes: "" });
   }
 
   function removeActivity(id) {
