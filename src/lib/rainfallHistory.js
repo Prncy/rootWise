@@ -1,30 +1,3 @@
-const ARCHIVE = "https://archive-api.open-meteo.com/v1/archive";
-
-export async function getRainfallHistory(latitude, longitude, now = new Date()) {
-  const lat = Number(latitude);
-  const lon = Number(longitude);
-  if (!Number.isFinite(lat) || lat < -90 || lat > 90 ||
-      !Number.isFinite(lon) || lon < -180 || lon > 180) {
-    throw new Error("Enter valid coordinates before loading rainfall history.");
-  }
-
-  const endYear = now.getUTCFullYear() - 1;
-  const startYear = endYear - 9;
-  const url = new URL(ARCHIVE);
-  url.search = new URLSearchParams({
-    latitude: String(lat),
-    longitude: String(lon),
-    start_date: startYear + "-01-01",
-    end_date: endYear + "-12-31",
-    daily: "precipitation_sum",
-    timezone: "auto"
-  }).toString();
-
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Historical rainfall service returned " + response.status + ".");
-  return summarizeRainfallHistory(await response.json());
-}
-
 export function summarizeRainfallHistory(payload) {
   const daily = payload?.daily;
   if (!Array.isArray(daily?.time) || !daily.time.length ||
